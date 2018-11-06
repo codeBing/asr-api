@@ -1,0 +1,90 @@
+syntax = "proto2";
+
+package com.ecarx.asrapi.dto;
+
+option cc_generic_services = true;
+
+//APIRequest：客户端的请求
+message APIRequest {
+
+    required APIReqType api_req_type = 1;
+    optional ApiParam param = 2;
+    optional ApiData data = 3;
+    optional ApiLast last = 4;
+    optional ApiCancel cancel = 5;
+    optional ApiThirdData third_data = 6;
+};
+
+//端上传给后端模块的请求类型
+enum APIReqType {
+    API_REQ_TYPE_PARAM = 1;
+    API_REQ_TYPE_DATA = 2;
+    API_REQ_TYPE_LAST = 3; //最后一包不带数据
+    API_REQ_TYPE_CANCEL = 4;
+    API_REQ_TYPE_THIRD_DATA = 5;
+};
+
+//参数包
+message ApiParam {
+    required string cuid = 1;
+    optional string appid = 2;
+    optional string apikey = 3;
+    optional string chunk_key = 4;
+    required int32 sample_rate = 5; //只支持16000
+    required string format = 6; //音频格式，如:pcm, wav, opus等
+    required int64 task_id = 7;
+    optional string pam = 8; //目前传递第三方请求使用该参数，json字符串
+    optional bool early_return = 9; //是否开启提前返回
+};
+
+//音频数据结构
+message ApiData {
+    required uint32 len = 1;
+    required bytes post_data = 2;
+};
+
+//结束指令, 不带任何数据
+message ApiLast {
+};
+
+//心跳指令, 不带任何数据
+message ApiHeart {
+};
+
+//取消指令结构, 不带任何数据
+message ApiCancel {
+};
+
+//第三方数据
+message ApiThirdData {
+    required uint32 len = 1;
+    required bytes third_data = 2; //用户或后端根据请求的第三方服务来填充该结构
+    optional string type = 3; //目前未用到该字段, 后续用来标识来自哪个第三方数据
+};
+
+// APIResponse：服务端的响应
+message APIResponse {
+    required APIRespType type = 1;
+    required string id = 2;
+    required int32 err_no = 3; //不等于0的时候，出错了，可以结束识别
+    optional string err_msg = 4;
+    optional ASRResult result = 5; //type为API_RESP_TYPE_MIDDLE或API_RESP_TYPE_RES时，后端返回result
+    optional ApiThirdData third_data = 6; //type为API_RESP_TYPE_THIRD时后端返回第三方数据，其格式据所请求的第三方服务来定
+    optional ApiHeart heart = 7; //type为API_RESP_TYPE_HEART时有该值
+    optional ApiLast last = 8; //type为 API_RESP_TYPE_LAST时有该值
+};
+
+//后端模块返回给端上的结果类型
+enum APIRespType {
+    API_RESP_TYPE_MIDDLE = 1; //中间结果
+    API_RESP_TYPE_RES = 2; //最终识别结果
+    API_RESP_TYPE_THIRD = 3; //第三方结果
+    API_RESP_TYPE_HEART = 4; //心跳
+    API_RESP_TYPE_LAST = 5; //整个识别过程结束, 流也结束了
+};
+
+//后端模块返回给端上的识别结果
+message ASRResult {
+    repeated string word = 1;
+    repeated string uncertain_word = 2;
+}

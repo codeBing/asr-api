@@ -1,0 +1,10 @@
+asr:
+    threads: 500
+    blockSize: 5120
+
+    upUrl: http://audiotest.baidu.com/open_asr_test/up
+    downUrl: http://audiotest.baidu.com/open_asr_test/down
+
+
+server:
+    port: 8000

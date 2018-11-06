@@ -1,0 +1,26 @@
+server:
+#    port: 8000
+#    http2:
+#        enabled: true
+#    compression:
+#        enabled: true
+#    ssl:
+#        key-store: classpath:ecarx.jks
+#        key-password: password
+#        key-store-password: secret
+asr:
+    encrypt:
+        keypair: RSA
+        #        cipher: OPENSSL_PKCS1_PADDING
+        #        cipher: RSA/None/NoPadding
+        #        cipher: RSA/None/PKCS1Padding
+        cipher: RSA/ECB/PKCS1Padding
+        encBlock: 117
+        decBlock: 128
+        pubkey: MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDhSzPPnFn41iaz+t4tI4kbaXNuNFOsI8hFeCYtlwPFKRbETHbBS10bMvUbOWLFtRgZV3L924GQ9orbomEmJ1nWyaSO8iBbZAyiWUP5PJJh/b9kHj1MMwG712bGfYYPdjkRprNpzU9w4UBzUMKKUoHU4c/Gbb4XeBK9LNTPWQL4YwIDAQAB
+
+spring:
+    profiles:
+        active: dev
+        word: \u676d\u5dde\u5929\u6c14\u600e\u4e48\u6837
+
