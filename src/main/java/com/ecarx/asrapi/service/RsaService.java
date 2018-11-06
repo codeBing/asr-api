@@ -1,6 +1,8 @@
 package com.ecarx.asrapi.service;
 
 import com.ecarx.asrapi.utils.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +31,8 @@ import java.security.spec.X509EncodedKeySpec;
 @Service
 public final class RsaService {
 
+	private static final Logger log = LoggerFactory.getLogger(RsaService.class);
+
 	@Value("${asr.encrypt.keypair}")
 	private String keyPair;
 
@@ -46,7 +50,6 @@ public final class RsaService {
 
 	/**
 	 * 随机生成RSA密钥对(默认密钥长度为1024)
-	 * @return
 	 */
 	public KeyPair generateRSAKeyPair() {
 		return generateRSAKeyPair(1024);
@@ -63,7 +66,7 @@ public final class RsaService {
 			kpg.initialize(keyLength);
 			return kpg.genKeyPair();
 		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
+			log.error("NoSuchAlgorithmException occur, error msg: ", e);
 			return null;
 		}
 	}
@@ -262,7 +265,6 @@ public final class RsaService {
 				sb.append('\r');
 			}
 		}
-
 		return sb.toString();
 	}
 }

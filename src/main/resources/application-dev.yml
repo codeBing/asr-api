@@ -1,3 +1,5 @@
+server:
+    port: 8000
 asr:
     threads: 500
     blockSize: 5120
@@ -5,6 +7,10 @@ asr:
     upUrl: http://audiotest.baidu.com/open_asr_test/up
     downUrl: http://audiotest.baidu.com/open_asr_test/down
 
+nlu:
+    version: 1.0
+    protocol: cellphone
+    url: "http://ai.ecarx.com.cn/test/ai/"
 
-server:
-    port: 8000
+
+

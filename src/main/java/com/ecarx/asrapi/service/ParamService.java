@@ -10,9 +10,9 @@ import com.ecarx.asrapi.dto.BEParam;
 import com.ecarx.asrapi.dto.nano.ASR;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,19 +22,23 @@ import java.util.UUID;
 /**
  * @author ITACHY
  * @date 2018/11/3
- * @desc TO-DO
+ * @desc build ASR parameters
  */
 
 @Service
 public class ParamService {
 
-	@Resource
-	private RsaService rsaService;
-
-	@Resource
-	private ASRConfig config;
-
 	private static Logger log = LoggerFactory.getLogger(ParamService.class);
+
+	private final ASRConfig config;
+
+	private final RsaService rsaService;
+
+	@Autowired
+	public ParamService(ASRConfig config, RsaService rsaService) {
+		this.config = config;
+		this.rsaService = rsaService;
+	}
 
 	public List<ASR.APIRequest> buildData(byte[] data) {
 		List<ASR.APIRequest> requests = new ArrayList<>();

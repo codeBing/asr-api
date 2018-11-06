@@ -1,22 +1,18 @@
 package com.ecarx.asrapi.service;
 
 import com.alibaba.fastjson.JSONObject;
-import com.ecarx.asrapi.interfaces.domain.NLUResponse;
-import okhttp3.Call;
-import okhttp3.Callback;
+import okhttp3.FormBody;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -30,91 +26,86 @@ public class NLUService {
 
 	private static Logger log = LoggerFactory.getLogger(NLUService.class);
 
-	private double version  = 1.0;
-	private String protocol = "cellphone";
-	private String url      = "http://ai.ecarx.com.cn/test/ai/";
+	@Value("${nlu.version}")
+	private double version;
 
-	/*private static WebClient webClient;
+	@Value("${nlu.protocol}")
+	private String protocol;
 
-	static {
-		ReactorClientHttpConnector connector = new ReactorClientHttpConnector(options ->
-				options.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 300000)
-						//.compression(true)
-						.afterNettyContextInit(ctx -> {
-							ctx.addHandlerLast(new ReadTimeoutHandler(300000, TimeUnit.MILLISECONDS));
-						}));
-		webClient = WebClient.builder().clientConnector(connector).build();
-	}*/
+	@Value("${nlu.url}")
+	private String url;
 
 	private static OkHttpClient httpClient;
 
 	static {
 		OkHttpClient.Builder builder = new OkHttpClient.Builder();
-		builder.connectTimeout(300000, TimeUnit.MILLISECONDS);
+		builder.connectTimeout(30000, TimeUnit.MILLISECONDS)
+				.readTimeout(30000, TimeUnit.MILLISECONDS)
+				.writeTimeout(30000, TimeUnit.MILLISECONDS);
 		httpClient = builder.build();
 	}
 
-	public String dialog(String device, String uid, String input) {
+	public String dialog(String device, String uid, String text) {
 
 		String domain = null, nlu = null;
 		try {
-			String     result      = login(webClient, device, uid);
+			String     result      = login(device, uid);
 			JSONObject jsonObject  = JSONObject.parseObject(result);
 			String     accessToken = jsonObject.getString("accessToken");
 			log.info("Token: {}", accessToken);
-			//这里车机才需要fetch
-			//fetch(webClient, accessToken);
-			talk(webClient, input, accessToken);
-			// 这里获取服务器的数据
-			nlu = fetch(webClient, accessToken);
-			log.info("nlu: {}", nlu);
-			logout(accessToken, device);
-			log.error("nul result: {}", nlu);
-			jsonObject = JSONObject.parseObject(nlu);
-			domain = jsonObject.getString("domain");
-			if (StringUtils.isEmpty(domain)) {
-				return dialog(device, uid, input);
+			if (null != accessToken) {
+				talk(text, accessToken);
+				// 这里获取服务器的数据
+				nlu = fetch(accessToken);
+				logout(accessToken, device);
+				jsonObject = JSONObject.parseObject(nlu);
+				domain = jsonObject.getString("domain");
+				if (StringUtils.isEmpty(domain)) {
+					return dialog(device, uid, text);
+				}
 			}
 		} catch (Exception e) {
 			log.error("Exception occur, error msg: ", e);
-			/*if (StringUtils.isEmpty(domain)) {
-				return dialog(device, uid, input);
-			}*/
-			return null;
+			if (StringUtils.isEmpty(domain)) {
+				return dialog(device, uid, text);
+			}
+			return nlu;
 		}
 		return nlu;
 	}
 
-	public String login(WebClient webClient, String device, String uid) {
+	public String login(String device, String uid) {
+
 		JSONObject json   = new JSONObject();
 		JSONObject client = new JSONObject();
 		client.put("deviceid", device);
 		client.put("uid", uid);
 		client.put("timezone", "Asia/Shanghai");
-		client.put("osFamily", "android");
-		client.put("osType", "VEHICLE");
-		client.put("osVersion", "android6.0");
-		client.put("appVersion", "android");
+		client.put("osFamily", "ANDROID");
+		client.put("deviceType", "MOBILE");
+		client.put("osVersion", "22");
+		client.put("deviceModel", "1.0");
+		client.put("appVersion", "1.0.0-SNAPSHOT");
 
 		JSONObject location = new JSONObject();
 		location.put("lng", 116.407394);
 		location.put("lat", 39.904211);
-		location.put("coordsType", "GCJ02");
+		location.put("type", "GCJ02");
 		client.put("location", location);
 
 		json.put("clientinfo", client);
 		json.put("type", "login");
 
-		String  result  = null;
-		Request request = new Request.Builder().url(url + "login?protocol=" + protocol + "&version=" + version).build();
+		String      uri     = new StringBuilder(url).append("login?protocol=").append(protocol).append("&version=").append(version).toString();
+		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
+		Request     request = new Request.Builder().url(uri).post(body).build();
 		try {
 			Response response = httpClient.newCall(request).execute();
-			result = response.body().string();
+			return response.body().string();
 		} catch (Exception e) {
-			log.error("NLU Loing request falied, error msg: ", e);
-			return result;
+			log.error("NLU Login request falied, error msg: ", e);
+			return null;
 		}
-		return result;
 	}
 
 	public void logout(String accessToken, String device) {
@@ -126,59 +117,41 @@ public class NLUService {
 		json.put("clientinfo", client);
 		json.put("type", "logout");
 
-		Request request = new Request.Builder().url(url + "login?protocol=" + protocol + "&version=" + version).build();
+		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
+		Request     request = new Request.Builder().url(url + "logout?ak=" + accessToken).post(body).build();
 		try {
 			Response response = httpClient.newCall(request).execute();
-			result = response.body().string();
+			log.info("NLU logout msg: {}", response.body().string());
 		} catch (Exception e) {
-			log.error("NLU Loing request falied, error msg: ", e);
-			return result;
+			log.error("NLU Logout request falied, error msg: ", e);
 		}
 
-		WebClient.RequestBodySpec reqBody = webClient.method(HttpMethod.POST)
-				.uri(url + "logout?ak=" + accessToken)
-				.headers(header -> {});
-		Mono<String> result = reqBody.contentType(MediaType.APPLICATION_JSON_UTF8)
-				.syncBody(json.toString())
-				.retrieve()
-				.bodyToMono(String.class);
-		log.info(result.block());
 	}
 
-	public void talk(WebClient webClient, String text, String accessToken) {
-		JSONObject json       = new JSONObject();
-		JSONObject clientinfo = new JSONObject();
-
-		JSONObject location = new JSONObject();
-		location.put("lng", 116.407394);
-		location.put("lat", 39.904211);
-		location.put("coordsType", "GCJ02");
-		clientinfo.put("location", location);
-
-		json.put("clientinfo", clientinfo);
-		json.put("type", "talk");
+	public void talk(String text, String accessToken) {
+		log.info("Talk: {}", text);
+		JSONObject json = new JSONObject();
+		json.put("clientinfo", new JSONObject());
+		json.put("type", "text_input");
 		json.put("q", text);
 		json.put("source", 1);
 
 		String uri = new StringBuilder(url)
-				.append("talk?protocol=")
-				.append(protocol)
-				.append("&version=")
-				.append(version)
-				.append("&ak=")
+				.append("talk?&ak=")
 				.append(accessToken).toString();
-		WebClient.RequestBodySpec reqBody = webClient.method(HttpMethod.POST)
-				.uri(uri)
-				.headers(header -> {});
-		Mono<String> result = reqBody.contentType(MediaType.APPLICATION_JSON_UTF8)
-				.syncBody(json.toString())
-				.retrieve()
-				.bodyToMono(String.class);
 
-		log.info(result.block());
+		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
+		Request     request = new Request.Builder().url(uri).post(body).build();
+		try {
+			Response response = httpClient.newCall(request).execute();
+			log.info("NLU talk msg: {}", response.body().string());
+		} catch (Exception e) {
+			log.error("NLU Talk request falied, error msg: ", e);
+		}
+
 	}
 
-	public String fetch(WebClient webClient, String accessToken) {
+	public String fetch(String accessToken) {
 
 		String uri = new StringBuilder(url)
 				.append("fetch?protocol=")
@@ -188,13 +161,16 @@ public class NLUService {
 				.append("&ak=")
 				.append(accessToken)
 				.toString();
-		WebClient.RequestBodySpec reqBody = webClient.method(HttpMethod.GET)
-				.uri(uri)
-				.headers(header -> {});
-		Mono<String> result = reqBody.retrieve().bodyToMono(String.class);
-		String       body   = result.block();
-		log.info("NLU Result: {}", body);
-		return body;
+		Request request = new Request.Builder().url(uri).get().build();
+		try {
+			Response response = httpClient.newCall(request).execute();
+			String   result   = response.body().string();
+			log.info("NLU fetch msg: {}", result);
+			return result;
+		} catch (Exception e) {
+			log.error("NLU Fetch request falied, error msg: ", e);
+			return null;
+		}
 	}
 
 }

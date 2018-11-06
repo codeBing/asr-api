@@ -3,18 +3,20 @@ package com.ecarx.asrapi.handler;
 import com.ecarx.asrapi.dto.nano.ASR;
 import com.ecarx.asrapi.service.HttpService;
 import com.google.protobuf.nano.MessageNano;
+import okhttp3.ResponseBody;
 import okio.Buffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -28,29 +30,33 @@ public class ASRHandler {
 
 	private static Logger log = LoggerFactory.getLogger(ASRHandler.class);
 
-	@Resource
-	private HttpService httpService;
+	private final HttpService httpService;
+
+	@Autowired
+	public ASRHandler(final HttpService httpService) {
+		this.httpService = httpService;
+	}
 
 	@GetMapping("hello")
-	public String hello() {
-		return "Hello ASR!";
+	public Mono<String> hello() {
+		return Mono.just("Hello ASR!");
 	}
 
 	//@PostMapping("auth")
 	@GetMapping("auth")
-	public Mono<ServerResponse> handleAuth() {
-		return handleNLUResponse(httpService.actvAuth(null));
+	public Flux<ASR.APIResponse> handleAuth() {
+		return null; //handleNLUResponse(httpService.actvAuth(null));
 	}
 
-	//@PostMapping("auth")
+	//@PostMapping("audth")
 	@GetMapping("audth")
-	public Mono<ServerResponse> handleAuthWithAudio() throws Exception {
+	public Flux<ResponseBody> handleAuthWithAudio() throws Exception {
 		return handleNLUResponse(httpService.actvAuthWithAudio(constructParam()));
 	}
 
 	//@PostMapping("asr")
 	@GetMapping("asr")
-	public Mono<ServerResponse> handleASR() throws Exception {
+	public Flux<ResponseBody> handleASR() throws Exception {
 		return handleNLUResponse(httpService.handleASR(constructParam()));
 	}
 
@@ -59,8 +65,10 @@ public class ASRHandler {
 	 * @date 2018/11/5
 	 * @desc Handle NUL Result
 	 */
-	private Mono<ServerResponse> handleNLUResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
-		Buffer buffer = new Buffer();
+	private Flux<ResponseBody> handleNLUResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
+
+		Buffer             buffer       = new Buffer();
+		List<ResponseBody> apiResponses = new ArrayList<>();
 		try {
 			ASR.APIResponse response = responses.take();
 			while (null != response) {
@@ -68,20 +76,23 @@ public class ASRHandler {
 				buffer.writeIntLe(response.getSerializedSize());
 				buffer.write(MessageNano.toByteArray(response));
 				buffer.flush();
+				apiResponses.add(ResponseBody.create(null, response.getSerializedSize(), buffer));
 				if (ASR.API_RESP_TYPE_LAST == response.type) {
-					return ServerResponse.ok().body(BodyInserters.fromObject(buffer));
+					return Flux.fromIterable(apiResponses);
 				}
 				response = responses.take();
 			}
-			return ServerResponse.ok().body(BodyInserters.fromObject(buffer));
 		} catch (Exception e) {
 			log.error("Take method of LinkedBlockingQueue class occur InterruptedException, error msg:", e);
-			return ServerResponse.ok().body(BodyInserters.fromObject(buffer));
 		}
+		return null;
 	}
 
 	private byte[] constructParam() throws Exception {
-		FileInputStream fis = new FileInputStream("D:\\common\\projects\\ecarx\\java\\asr-api\\src\\main\\resources\\weather.pcm");
+
+		String filePath = "D:\\common\\projects\\ecarx\\java\\asr-api\\src\\main\\resources\\weather.pcm";
+
+		FileInputStream fis = new FileInputStream(filePath);
 
 		byte[] buffer = new byte[5120];
 
@@ -138,7 +149,7 @@ public class ASRHandler {
 			break;
 		case ASR.API_RESP_TYPE_THIRD:
 			byte[] data = response.thirdData.thirdData;
-			log.info("Third Package：{}", new String(data));
+			log.info("Third-Data Package：{}", new String(data));
 			break;
 		case ASR.API_RESP_TYPE_HEART:
 			log.info("Heart Package!");

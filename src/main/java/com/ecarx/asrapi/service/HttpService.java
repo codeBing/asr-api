@@ -5,6 +5,7 @@ import com.ecarx.asrapi.consts.EnvConsts;
 import com.ecarx.asrapi.dto.nano.ASR;
 import com.ecarx.asrapi.interfaces.domain.ASRResponse;
 import com.ecarx.asrapi.interfaces.ResponseCallBack;
+import com.ecarx.asrapi.interfaces.domain.NLUResponse;
 import com.google.protobuf.nano.MessageNano;
 import okhttp3.Call;
 import okhttp3.FormBody;
@@ -18,6 +19,7 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Nullable;
@@ -44,27 +46,30 @@ public class HttpService {
 
 	private static final Logger log = LoggerFactory.getLogger(HttpService.class);
 
-	@Resource
-	private ASRConfig config;
+	private final ASRConfig config;
 
-	@Resource
-	private ParamService paramService;
+	private final NLUService nluService;
 
-	@Resource
-	private NLUService nluService;
+	private final ParamService paramService;
 
-	private ThreadPoolExecutor executor;
+	private final ThreadPoolExecutor executor;
 
 	private OkHttpClient httpClient;
 
 	private OkHttpClient.Builder clientBuilder;
 
-	public HttpService() {
+	@Autowired
+	public HttpService(final ASRConfig config, final NLUService nluService, final ParamService paramService) {
+
+		this.config = config;
+		this.nluService = nluService;
+		this.paramService = paramService;
+
 		this.clientBuilder = new OkHttpClient.Builder();
 		this.clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
 		httpClient = clientBuilder.build();
 
-		this.executor = new ScheduledThreadPoolExecutor(500);
+		this.executor = new ScheduledThreadPoolExecutor(config.getThreads());
 	}
 
 	/**
@@ -96,7 +101,6 @@ public class HttpService {
 
 	//统一处理Http2
 	private LinkedBlockingQueue<ASR.APIResponse> handleHttp2(String type, byte[] data) {
-
 		String id = UUID.randomUUID().toString();
 
 		LinkedBlockingQueue<ASR.APIResponse> responses = new LinkedBlockingQueue<>();
@@ -172,18 +176,13 @@ public class HttpService {
 		}
 		postASR(url, builder.build(), headers, (sink, byteCount) -> {
 			try {
-				if (sink.toString().indexOf("Request") > 0) {
-					log.error("Invalid Request!");
-					responses.addAll(buildFailResponse(sink.toString()));
-					return;
-				}
-				if (sink.toString().indexOf("OK") > 0) {
-					responses.addAll(buildFailResponse(sink.toString()));
-					return;
-				}
-				//log.info("sink msg: {}", sink.toString());
+				log.info("sink msg: {}", sink.toString());
 				while (sink.size() > 0) {
-					long   len  = sink.readIntLe();
+					long len = sink.readIntLe();
+					if (len > byteCount) {
+						responses.addAll(buildFailResponse(sink.toString()));
+						return;
+					}
 					byte[] data = sink.readByteArray(len);
 					responses.add(ASR.APIResponse.parseFrom(data));
 				}
@@ -217,7 +216,6 @@ public class HttpService {
 			requestBuilder.headers(headers);
 		}
 		Request request = requestBuilder.build();
-		Call    call    = httpClient.newCall(request);
 
 		/*call.enqueue(new Callback() {
 			@Override

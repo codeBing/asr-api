@@ -2,6 +2,7 @@ syntax = "proto2";
 
 package com.ecarx.asrapi.dto;
 
+option java_outer_classname = "ASRApi";
 option cc_generic_services = true;
 
 //APIRequest：客户端的请求
