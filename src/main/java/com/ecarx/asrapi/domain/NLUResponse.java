@@ -1,4 +1,4 @@
-package com.ecarx.asrapi.interfaces.domain;
+package com.ecarx.asrapi.domain;
 
 import okhttp3.MediaType;
 import okhttp3.ResponseBody;

@@ -1,6 +1,5 @@
-package com.ecarx.asrapi.interfaces.domain;
+package com.ecarx.asrapi.domain;
 
-import com.ecarx.asrapi.interfaces.ResponseCallBack;
 import okhttp3.MediaType;
 import okhttp3.ResponseBody;
 import okio.Buffer;
@@ -8,8 +7,11 @@ import okio.BufferedSource;
 import okio.ForwardingSource;
 import okio.Okio;
 import okio.Source;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.function.BiConsumer;
 
 /**
  * @author ITACHY
@@ -18,12 +20,14 @@ import java.io.IOException;
  */
 public class ASRResponse extends ResponseBody {
 
-	private ResponseBody     respBody;
-	private ResponseCallBack callBack;
+	private final static Logger log = LoggerFactory.getLogger(ASRResponse.class);
+
+	private ResponseBody             respBody;
+	private BiConsumer<Buffer, Long> callBack;
 
 	private BufferedSource buffSource = null;
 
-	public ASRResponse(ResponseBody body, ResponseCallBack callBack) {
+	public ASRResponse(ResponseBody body, BiConsumer<Buffer, Long> callBack) {
 		this.respBody = body;
 		this.callBack = callBack;
 	}
@@ -40,9 +44,11 @@ public class ASRResponse extends ResponseBody {
 
 	@Override
 	public BufferedSource source() {
+		log.error("----------Source--------------");
 		if (buffSource == null) {
 			buffSource = Okio.buffer(source(respBody.source()));
 		}
+		log.error("----------SourceFinish--------------");
 		return buffSource;
 	}
 
@@ -52,7 +58,7 @@ public class ASRResponse extends ResponseBody {
 			public long read(Buffer sink, long byteCount) throws IOException {
 				long bytes = super.read(sink, byteCount);
 				if (callBack != null) {
-					callBack.read(sink, byteCount);
+					callBack.accept(sink, byteCount);
 				}
 				return bytes;
 			}

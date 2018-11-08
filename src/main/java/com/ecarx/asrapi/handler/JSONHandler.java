@@ -4,36 +4,35 @@ import com.ecarx.asrapi.dto.nano.ASR;
 import com.ecarx.asrapi.service.HttpService;
 import com.ecarx.asrapi.service.NLUService;
 import com.ecarx.asrapi.service.ThreadService;
-import com.google.protobuf.nano.MessageNano;
 import okhttp3.RequestBody;
-import okhttp3.ResponseBody;
-import okio.Buffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.server.ServerRequest;
-import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Collectors;
 
 /**
  * @author ITACHY
  * @date 2018/10/29
  * @desc ASR Web 请求处理
  */
+@RestController
+@RequestMapping("/json")
+public class JSONHandler {
 
-@Controller
-public class ASRHandler {
-
-	private static Logger log = LoggerFactory.getLogger(ASRHandler.class);
+	private static Logger log = LoggerFactory.getLogger(JSONHandler.class);
 
 	private final NLUService nluService;
 
@@ -42,69 +41,38 @@ public class ASRHandler {
 	private final ThreadService threadService;
 
 	@Autowired
-	public ASRHandler(final NLUService nluService, final HttpService httpService, final ThreadService threadService) {
+	public JSONHandler(final NLUService nluService, final HttpService httpService, final ThreadService threadService) {
 		this.nluService = nluService;
 		this.httpService = httpService;
 		this.threadService = threadService;
+
 	}
 
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc for client connection test
-	 */
-	@GetMapping("hello")
-	@org.springframework.web.bind.annotation.ResponseBody
+	@GetMapping("/hello")
 	public Mono<String> hello() {
 		return Mono.just("Hello ASR!");
 	}
 
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc for connecting ARS
-	 */
-	@GetMapping("asr")
-	public Mono<ServerResponse> handleASR() throws Exception {
-		Mono<ResponseBody> resBody = handleNLUResponse(httpService.handleASR(constructParam()));
-		return Mono.just(ServerResponse.ok().body(BodyInserters.fromObject(resBody)).block());
+	@GetMapping("/asr")
+	public Flux<ASR.APIResponse> handleASR() throws Exception {
+		return handleNLUResponse(httpService.handleASR(constructParam()));
 	}
 
-	/*@PostMapping("auth/up")
-	public Mono<String> handleAuthUp(ServerRequest serverRequest) {
-
-		String      id   = serverRequest.queryParam("id").get();
-		RequestBody body = serverRequest.bodyToMono(RequestBody.class).block();
+	//@PostMapping("asr")
+	@GetMapping("/asr")
+	public Mono<String> handleASRUp(ServerRequest request) {
+		String      id   = request.queryParam("id").get();
+		RequestBody body = request.bodyToMono(RequestBody.class).block();
 		httpService.handleASRUp(id, body);
 		return Mono.just("OK");
 	}
 
-	@PostMapping("auth/down")
-	public Mono<ResponseBody> handleAuthDown(ServerRequest serverRequest) {
-		String      id   = serverRequest.queryParam("id").get();
-		RequestBody body = serverRequest.bodyToMono(RequestBody.class).block();
+	//@PostMapping("asr")
+	@GetMapping("/asr")
+	public Flux<ASR.APIResponse> handleASRDown(ServerRequest request) {
+		String      id   = request.queryParam("id").get();
+		RequestBody body = request.bodyToMono(RequestBody.class).block();
 		return handleNLUResponse(httpService.handleASRDown(id, body));
-	}*/
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc response client request and return ASR/NLU response
-	 */
-	@PostMapping("asr/up")
-	public Mono<String> handleASRUp(ServerRequest serverRequest) {
-		String      id   = serverRequest.queryParam("id").get();
-		RequestBody body = serverRequest.bodyToMono(RequestBody.class).block();
-		httpService.handleASRUp(id, body);
-		return Mono.just("OK");
-	}
-
-	@PostMapping("asr/down")
-	public Mono<ServerResponse> handleASRDown(ServerRequest request) {
-		String             id      = request.queryParam("id").get();
-		RequestBody        body    = request.bodyToMono(RequestBody.class).block();
-		Mono<ResponseBody> resBody = handleNLUResponse(httpService.handleASRDown(id, body));
-		return Mono.just(ServerResponse.ok().body(BodyInserters.fromObject(resBody)).block());
 	}
 
 	/**
@@ -112,20 +80,19 @@ public class ASRHandler {
 	 * @date 2018/11/5
 	 * @desc Handle NUL Result
 	 */
-	private Mono<ResponseBody> handleNLUResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
-
-		Future<String> future   = null;
-		Boolean        finished = false;
-		Buffer         buffer   = new Buffer();
+	private Flux<ASR.APIResponse> handleNLUResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
+		Future<String>        future       = null;
+		Boolean               finished     = false;
+		List<ASR.APIResponse> apiResponses = new ArrayList<>();
 		try {
 			ASR.APIResponse response = responses.take();
 			while (null != response) {
-				//response = resolveASRResponse(response);
 				int type = response.type;
 				if (ASR.API_RESP_TYPE_THIRD == type || ASR.API_RESP_TYPE_HEART == type) {
 					response = responses.take();
 					continue;
 				} else if (ASR.API_RESP_TYPE_RES == type) {
+
 					if (null != response && 0 == response.errNo) {
 						StringBuilder sb      = new StringBuilder();
 						String[]      words   = response.result.word;
@@ -148,18 +115,18 @@ public class ASRHandler {
 					response.result = result;
 					finished = true;
 				}
-				buffer.writeIntLe(response.getSerializedSize());
-				buffer.write(MessageNano.toByteArray(response));
-				buffer.flush();
+				apiResponses.add(response);
 				if (finished) {
-					return Mono.just(ResponseBody.create(null, buffer.size(), buffer));
+					break;
 				}
 				response = responses.take();
 			}
 		} catch (Exception e) {
-			log.error("Take method of LinkedBlockingQueue class occur InterruptedException, error msg:", e);
+			log.error("Take response occur eror. error msg: {}", e);
 		}
-		return null;
+		return Flux.fromIterable(apiResponses.stream()
+				.map(response -> resolveASRResponse(response))
+				.collect(Collectors.toList()));
 	}
 
 	private byte[] constructParam() throws Exception {
