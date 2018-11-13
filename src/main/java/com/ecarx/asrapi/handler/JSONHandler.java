@@ -6,7 +6,10 @@ import com.ecarx.asrapi.service.HttpService;
 import com.ecarx.asrapi.service.NLUService;
 import com.ecarx.asrapi.service.WebService;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.FormBody;
+import okio.BufferedSink;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.util.ArrayList;
@@ -57,25 +61,50 @@ public class JSONHandler {
 
 	@GetMapping(value = "", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public Flux<ASR.APIResponse> handleASR() throws Exception {
-		return handleNLUResponse(webService.handleASR("", constructParam()));
+		return handleNLUResponse(webService.handleASR("json", constructParam()));
 	}
 
 	@PostMapping(value = "up", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
 	public Mono<String> handleASRUp(@RequestParam String id, ServerHttpRequest request) {
 
-		byte[] data = request.getBody().toIterable().iterator().next().asByteBuffer().array();
+		okhttp3.RequestBody body = new okhttp3.RequestBody() {
+			@Nullable
+			@Override
+			public okhttp3.MediaType contentType() {
+				return null;
+			}
 
-		okhttp3.RequestBody body = okhttp3.RequestBody.create(null, data);
+			@Override
+			public void writeTo(BufferedSink sink) {
+
+				Flux<DataBuffer> fluxBody = request.getBody();
+				fluxBody.subscribe(body -> {
+					int length = body.readableByteCount();
+					if (length > 4) {
+						byte[] bytes = new byte[length];
+						byte[] data  = new byte[length - 4];
+						body.read(bytes);
+						System.arraycopy(bytes, 4, data, 0, data.length);
+						try {
+							sink.writeIntLe(data.length);
+							sink.write(data);
+							sink.flush();
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+
+					}
+				});
+			}
+		};
 		httpService.handleASRUp(id, body);
 		return Mono.just("OK");
 	}
 
 	@PostMapping(value = "down", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
 			produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-	public Flux<ASR.APIResponse> handleASRDown(@RequestParam String id, ServerHttpRequest request) {
-		byte[]              data = request.getBody().toIterable().iterator().next().asByteBuffer().array();
-		okhttp3.RequestBody body = okhttp3.RequestBody.create(null, data);
-		return handleASRResponse(httpService.handleASRDown(id, body));
+	public Flux<ASR.APIResponse> handleASRDown(@RequestParam String id) {
+		return handleASRResponse(httpService.handleASRDown(id, new FormBody.Builder().build()));
 	}
 
 	private Flux<ASR.APIResponse> handleNLUResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {

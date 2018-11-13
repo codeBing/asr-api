@@ -53,8 +53,6 @@ public class WebService {
 
 	private OkHttpClient httpClient;
 
-
-
 	@Autowired
 	public WebService(final ASRConfig config, final ParamService paramService) {
 
@@ -168,38 +166,26 @@ public class WebService {
 		}
 		handlePostASR(url, new FormBody.Builder().build(), headers, (sink, byteCount) -> {
 			try {
-				while (sink.size() > 0) {
-					if (sink.size() < 4) {
-						System.err.println("从百度拿来的结果，sleep一会儿：");
-						System.err.println(sink.size() + ":" + sink.toString());
-						Thread.sleep(100L);
-						break;
-					}
+				while (sink.size() > 4) {
 					log.info("Sink text: ", sink.toString());
 					long            len         = sink.readIntLe();
 					byte[]          data        = sink.readByteArray(len);
 					ASR.APIResponse apiResponse = ASR.APIResponse.parseFrom(data);
 					responses.add(apiResponse);
-					System.err.println("从百度拿来的结果：" + apiResponse.toString());
+					log.info("ASR response：" + apiResponse.toString());
 					if (apiResponse.type == 5) {
-						System.err.println("从百度拿来的结果结束：");
+						log.info("从百度拿来的结果结束!");
 						break;
 					}
 				}
-				/*if (responses.size() == 0) {
-					responses.addAll(buildFailResponse("No Msg!"));
-				}*/
 			} catch (Exception e) {
 				log.error("Read response failed. error msg: ", e);
 			}
 		});
-		System.err.println("线程看起来结束");
-		return;
 	}
 
 	private void handlePostASR(String url, RequestBody body, Headers headers, BiConsumer<Buffer, Long> callBack) {
 		OkHttpClient httpClient = this.httpClient;
-		log.info("请求Url：{}", url);
 		if (null != callBack) {
 			OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
 			clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
@@ -226,14 +212,14 @@ public class WebService {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				//trigger read response
-				log.info(url + ", resp_code:" + response.code());
-				log.info(url + ", resp_message:" + response.message());
-				log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
-				log.info(url + ", resp_protocol:" + response.protocol());
-				String body_string = response.body().string();
-				log.info(url + ", resp_body:" + body_string);
-				//log.info("response text: ", response.body().string());
+				if (null != callBack) {
+					//trigger read response
+					log.info(url + ", resp_code:" + response.code());
+					log.info(url + ", resp_message:" + response.message());
+					log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+					log.info(url + ", resp_protocol:" + response.protocol());
+					log.info(url + "response text: ", response.body().string());
+				}
 			}
 		});
 	}

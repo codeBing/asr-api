@@ -9,6 +9,7 @@ import com.google.protobuf.nano.MessageNano;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.FormBody;
 import okio.Buffer;
+import okio.BufferedSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
@@ -20,17 +21,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * @author ITACHY
@@ -82,7 +86,7 @@ public class ASRHandler {
 	 * @desc for connecting ARS
 	 */
 	@GetMapping(value = "", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-	public Mono<ServerResponse> handleASR() throws Exception {
+	public Flux<okhttp3.ResponseBody> handleASR() throws Exception {
 		LinkedBlockingQueue<ASR.APIResponse> responses = webService.handleASR("local", constructParam());
 		return buildASRResponse(responses);
 	}
@@ -96,51 +100,64 @@ public class ASRHandler {
 	@ResponseBody
 	public Mono<String> handleASRUp(@RequestParam String id, ServerHttpRequest request) {
 
-		Flux<DataBuffer> fluxBody = request.getBody();
-
-		/*fluxBody.subscribe(buffer -> {
-			byte[] bytes = new byte[buffer.readableByteCount()];
-			buffer.read(bytes);
-			DataBufferUtils.release(buffer);
-			try {
-				String bodyString = new String(bytes, "utf-8");
-				System.out.println(bodyString);
-			} catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
+		/*okhttp3.RequestBody body = new okhttp3.RequestBody() {
+			@Nullable
+			@Override
+			public okhttp3.MediaType contentType() {
+				return null;
 			}
-		});*/
-		fluxBody.subscribe(body -> {
-			byte[] lenByte = new byte[4];
-			body.read(lenByte);
-			try {
 
-				int    len   = bytesToInt(lenByte, 0);
-				byte[] intLe = new byte[len];
-				int    i     = 0;
-				//while (i < len) {
-				body.read(intLe, i, len);
-				//}
+			@Override
+			public void writeTo(BufferedSink sink) throws IOException {
 
-				//ByteArrayOutputStream baos       = new ByteArrayOutputStream();
-				ASR.APIRequest apiRequest = ASR.APIRequest.parseFrom(intLe);
-				System.out.println(apiRequest.toString());
-			} catch (Exception e) {
-				e.printStackTrace();
+				Flux<DataBuffer> fluxBody = request.getBody();
+				fluxBody.subscribe(buffer -> {
+					int length = buffer.readableByteCount();
+					if (length > 4) {
+						byte[] bytes = new byte[length];
+						byte[] data  = new byte[length - 4];
+						buffer.read(bytes);
+						System.arraycopy(bytes, 4, data, 0, data.length);
+						try {
+							sink.writeIntLe(data.length);
+							sink.write(data);
+							sink.flush();
+
+							//----------------
+							ASR.APIRequest apiRequest = ASR.APIRequest.parseFrom(data);
+							log.info("Request Msg: {}", apiRequest.toString());
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+
+					}
+				});
+			}
+		};
+		httpService.handleASRUp(id, body);*/
+
+		LinkedBlockingQueue<ASR.APIRequest> requests = new LinkedBlockingQueue<>();
+		Flux<DataBuffer>                    fluxBody = request.getBody();
+		fluxBody.subscribe(buffer -> {
+			int length = buffer.readableByteCount();
+			log.info("Msg length: {}", length);
+			if (length > 4) {
+				byte[] bytes = new byte[length];
+				byte[] data  = new byte[length - 4];
+				buffer.read(bytes);
+				System.arraycopy(bytes, 4, data, 0, data.length);
+				try {
+					ASR.APIRequest apiRequest = ASR.APIRequest.parseFrom(data);
+					requests.add(apiRequest);
+					log.info("Request Msg: {}", apiRequest.toString());
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
 			}
 		});
-
-		//okhttp3.RequestBody body = okhttp3.RequestBody.create(null, data);
-		//httpService.handleASRUp(id, body);
+		httpService.handleASRUp(id, requests);
 		return Mono.just("OK");
-	}
-
-	public static int bytesToInt(byte[] src, int offset) {
-		int value;
-		value = (int) ((src[offset] & 0xFF)
-				| ((src[offset + 1] & 0xFF) << 8)
-				| ((src[offset + 2] & 0xFF) << 16)
-				| ((src[offset + 3] & 0xFF) << 24));
-		return value;
 	}
 
 	/**
@@ -148,9 +165,8 @@ public class ASRHandler {
 	 * @date 2018/11/8
 	 * @desc response client down request
 	 */
-	@PostMapping(value = "down")
-	public Mono<ServerResponse> handleASRDown(@RequestBody String id) {
-
+	@PostMapping(value = "down", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public Flux<okhttp3.ResponseBody> handleASRDown(@RequestBody String id) {
 		LinkedBlockingQueue<ASR.APIResponse> responses = httpService.handleASRDown(id, new FormBody.Builder().build());
 		return buildASRResponse(responses);
 	}
@@ -185,15 +201,17 @@ public class ASRHandler {
 	 * @date 2018/11/12
 	 * @desc 构建ASR 返回结果
 	 */
-	private Mono<ServerResponse> buildASRResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
-		Buffer buffer = new Buffer();
+	private Flux<okhttp3.ResponseBody> buildASRResponse(LinkedBlockingQueue<ASR.APIResponse> responses) {
+		Buffer                buffer       = null;
+		Boolean               finished     = true;
+		List<ASR.APIResponse> apiResponses = new ArrayList<>();
 		try {
 			Future<String>  future   = null;
-			ASR.APIResponse response = responses.take();
+			ASR.APIResponse response = responses.poll(30000, TimeUnit.MILLISECONDS);
 			while (null != response) {
 				final int type = response.type;
 				if (ASR.API_RESP_TYPE_THIRD == type || ASR.API_RESP_TYPE_HEART == type) {
-					response = responses.take();
+					response = responses.poll(30000, TimeUnit.MILLISECONDS);
 					continue;
 				}
 
@@ -211,19 +229,44 @@ public class ASRHandler {
 							response.result = result;
 						}
 					}
+					finished = true;
 				}
+				/*buffer = new Buffer();
 				buffer.writeIntLe(response.getSerializedSize());
 				buffer.write(MessageNano.toByteArray(response));
-				buffer.flush();
-				response = responses.take();
+				buffer.flush();*/
+				apiResponses.add(response);
+				if (finished) {
+					break;
+				}
+				response = responses.poll(30000, TimeUnit.MILLISECONDS);
 			}
 		} catch (Exception e) {
 			log.error("Take response failed, detail error msg: ", e);
-			return ServerResponse.badRequest().body(BodyInserters.fromObject(e));
 		}
-		return ServerResponse.ok()
-				.contentType(MediaType.APPLICATION_OCTET_STREAM)
-				.body(BodyInserters.fromObject(BodyInserters.fromObject(buffer)));
+
+		List<okhttp3.ResponseBody> collect = apiResponses.stream().map(response -> new okhttp3.ResponseBody() {
+			@Nullable
+			@Override
+			public okhttp3.MediaType contentType() {
+				return null;
+			}
+
+			@Override
+			public long contentLength() {
+				return response.getSerializedSize();
+			}
+
+			@Override
+			public BufferedSource source() {
+				Buffer buffer = new Buffer();
+				buffer.writeIntLe(response.getSerializedSize());
+				buffer.write(MessageNano.toByteArray(response));
+				buffer.flush();
+				return buffer;
+			}
+		}).collect(Collectors.toList());
+		return Flux.fromIterable(collect);
 	}
 
 	private byte[] constructParam() throws Exception {
