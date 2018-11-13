@@ -7,8 +7,6 @@ import okio.BufferedSource;
 import okio.ForwardingSource;
 import okio.Okio;
 import okio.Source;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.function.BiConsumer;
@@ -20,7 +18,7 @@ import java.util.function.BiConsumer;
  */
 public class ASRResponse extends ResponseBody {
 
-	private final static Logger log = LoggerFactory.getLogger(ASRResponse.class);
+	//private final static Logger log = LoggerFactory.getLogger(ASRResponse.class);
 
 	private ResponseBody             respBody;
 	private BiConsumer<Buffer, Long> callBack;
@@ -44,11 +42,9 @@ public class ASRResponse extends ResponseBody {
 
 	@Override
 	public BufferedSource source() {
-		log.error("----------Source--------------");
 		if (buffSource == null) {
 			buffSource = Okio.buffer(source(respBody.source()));
 		}
-		log.error("----------SourceFinish--------------");
 		return buffSource;
 	}
 

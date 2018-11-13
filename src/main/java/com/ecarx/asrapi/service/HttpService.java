@@ -1,35 +1,25 @@
 package com.ecarx.asrapi.service;
 
 import com.ecarx.asrapi.configs.ASRConfig;
-import com.ecarx.asrapi.consts.EnvConsts;
 import com.ecarx.asrapi.domain.ASRResponse;
 import com.ecarx.asrapi.dto.nano.ASR;
-import com.google.protobuf.nano.MessageNano;
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.FormBody;
 import okhttp3.Headers;
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okio.Buffer;
-import okio.BufferedSink;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -41,10 +31,9 @@ import java.util.function.BiConsumer;
  * @date 2018/10/29
  * @desc Http request service
  */
+@Slf4j
 @Service
 public class HttpService {
-
-	private static final Logger log = LoggerFactory.getLogger(HttpService.class);
 
 	private final ASRConfig config;
 
@@ -52,156 +41,65 @@ public class HttpService {
 
 	private final ParamService paramService;
 
-	private final ThreadService threadService;
+	private final ThreadPoolExecutor executor;
 
 	private OkHttpClient httpClient;
 
-	private OkHttpClient.Builder clientBuilder;
+	private final OkHttpClient.Builder clientBuilder;
 
 	@Autowired
-	public HttpService(final ASRConfig config, final NLUService nluService, final ParamService paramService, ThreadService threadService) {
+	public HttpService(final ASRConfig config, final NLUService nluService, final ParamService paramService) {
 
 		this.config = config;
 		this.nluService = nluService;
 		this.paramService = paramService;
-		this.threadService = threadService;
+		this.executor = new ScheduledThreadPoolExecutor(config.getThreads());
 
-		this.clientBuilder = new OkHttpClient.Builder();
-		this.clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
-		httpClient = clientBuilder.build();
+		this.clientBuilder = new OkHttpClient.Builder()
+				//.readTimeout(30, TimeUnit.SECONDS)
+				//.writeTimeout(30, TimeUnit.SECONDS)
+				//.connectTimeout(30, TimeUnit.SECONDS)
+				.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
+		this.httpClient = this.clientBuilder.build();
 	}
 
 	/**
 	 * @author ITACHY
 	 * @date 2018/11/3
-	 * @desc only for local test
-	 */
-	public LinkedBlockingQueue<ASR.APIResponse> handleASR(byte[] data) {
-		return handleHttp2(EnvConsts.ASR_DATA, data);
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc only for local test
-	 */
-	private LinkedBlockingQueue<ASR.APIResponse> handleHttp2(String type, byte[] data) {
-		String id = UUID.randomUUID().toString();
-
-		LinkedBlockingQueue<ASR.APIResponse> responses = new LinkedBlockingQueue<>();
-		//handle up steam
-		threadService.execute(() -> handleUpStream(config.getUpUrl() + "?id=" + id, type, data));
-		//handle down stream
-		threadService.execute(() -> handleDownStream(config.getDownUrl() + "?id=" + id, responses));
-		return responses;
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/3
-	 * @desc handle up stream
-	 */
-	private void handleUpStream(String url, String type, byte[] data) {
-
-		Headers              headers  = buildUpHeader();
-		List<ASR.APIRequest> requests = new ArrayList<>();
-		switch (type) {
-		case EnvConsts.ASR_AUTH:
-			requests.addAll(paramService.buildActv());
-			break;
-		case EnvConsts.ASR_DATA:
-			requests.addAll(paramService.buildData(data));
-			break;
-		case EnvConsts.ASR_AUTH_WITH_AUDIO:
-			requests.addAll(paramService.buildActvWithAudio(data));
-			break;
-		}
-
-		RequestBody body = new RequestBody() {
-			@Nullable
-			@Override
-			public MediaType contentType() {
-				return null;
-			}
-
-			@Override
-			public void writeTo(BufferedSink sink) {
-				requests.forEach(request -> {
-					if (null != request) {
-						byte[] bytes = MessageNano.toByteArray(request);
-						try {
-							sink.writeIntLe(bytes.length);
-							sink.write(bytes);
-							sink.flush();
-							TimeUnit.MILLISECONDS.sleep(100);
-						} catch (Exception e) {
-							log.error("Param write error: ", e);
-						}
-					}
-				});
-			}
-		};
-		handlePostASR(url, body, headers, null);
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/3
-	 * @desc handle asr request
+	 * @desc handle asr up request
 	 */
 	public void handleASRUp(String id, final RequestBody body) {
 		//handle up steam
-		threadService.execute(() -> handleUpStream(config.getUpUrl() + "?id=" + id, body));
+		Headers headers = buildUpHeader();
+		String  url     = config.getBaidu() + "/up?id=" + id;
+		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
 
-	public LinkedBlockingQueue<ASR.APIResponse> handleASRDown(String id, final RequestBody body) {
+	/**
+	 * @author ITACHY
+	 * @date 2018/11/8
+	 * @desc handle asr down request
+	 */
+	public LinkedBlockingQueue<ASR.APIResponse> handleASRDown(String id, RequestBody body) {
 
 		LinkedBlockingQueue<ASR.APIResponse> responses = new LinkedBlockingQueue<>();
 		//handle down stream
-		threadService.execute(() -> handleDownStream(config.getDownUrl() + "?id=" + id, responses));
-		return responses;
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc as server to sent up stream
-	 */
-	private void handleUpStream(String url, final RequestBody body) {
-		Headers headers = buildUpHeader();
-		handlePostASR(url, body, headers, null);
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/3
-	 * @desc as server to send down stream
-	 */
-	private void handleDownStream(String url, LinkedBlockingQueue<ASR.APIResponse> responses) {
-
+		String  url     = config.getBaidu() + "/down?id=" + id;
 		Headers headers = buildDownHeader();
-		try {
-			TimeUnit.MILLISECONDS.sleep(1000);
-		} catch (Exception e) {
-			log.error("sleep error, error msg: ", e);
-		}
-		handlePostASR(url, new FormBody.Builder().build(), headers, (sink, byteCount) -> {
+
+		BiConsumer<Buffer, Long> callBack = (sink, byteCount) -> {
 			try {
 				while (sink.size() > 0) {
-					long len = sink.readIntLe();
-					/*if (len > byteCount) {
-						log.error("Resolve sink failed, error msg: {}", sink.toString());
-						responses.addAll(buildFailResponse(sink.toString()));
-						return;
-					}*/
+					long   len  = sink.readIntLe();
 					byte[] data = sink.readByteArray(len);
 					responses.add(ASR.APIResponse.parseFrom(data));
 				}
 			} catch (Exception e) {
 				log.error("Read response failed. error msg: ", e);
 			}
-		});
-		return;
+		};
+		executor.execute(() -> handlePostASR(url, body, headers, callBack));
+		return responses;
 	}
 
 	/**
@@ -214,21 +112,29 @@ public class HttpService {
 		if (null != callBack) {
 			clientBuilder.addNetworkInterceptor(chain -> {
 				Response response = chain.proceed(chain.request());
-				log.info("resp_body: {}", response.body().getClass());
 				return response.newBuilder().body(new ASRResponse(response.body(), callBack)).build();
 			});
 			httpClient = clientBuilder.build();
 		}
 
-		Request.Builder requestBuilder = new Request.Builder();
-		requestBuilder.url(url).post(body);
-		if (null != headers) {
-			requestBuilder.headers(headers);
+		Request request = new Request.Builder().url(url).post(body).headers(headers).build();
+		try {
+			Response response = httpClient.newCall(request).execute();
+
+			log.info(url + ", resp_code:" + response.code());
+			log.info(url + ", resp_message:" + response.message());
+			log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+			log.info(url + ", resp_protocol:" + response.protocol());
+			String body_string = response.body().string();
+			log.info(url + ", resp_body:" + body_string);
+		} catch (Exception e) {
+
 		}
-		Request request = requestBuilder.build();
-		Call    call    = httpClient.newCall(request);
+		;
+		/*Call    call    = httpClient.newCall(request);
 
 		call.enqueue(new Callback() {
+
 			@Override
 			public void onFailure(Call call, IOException e) {
 				log.error("ASR request failed, fail msg: ", e);
@@ -236,37 +142,21 @@ public class HttpService {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				//trigger read response
-				response.body().string();
-			}
-		});
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/3
-	 * @desc parse ASR result to NLU
-	 */
-	public ASR.APIResponse resolveASR2NLU(ASR.APIResponse response) {
-
-		if (null != response && 0 == response.errNo) {
-			StringBuilder sb      = new StringBuilder();
-			String[]      words   = response.result.word;
-			String[]      unknown = response.result.uncertainWord;
-			if (0 == unknown.length) {
-				for (String word : words) {
-					sb.append(word);
+				if (null != callBack) {
+					log.info("Url: ", url);
+					log.info("Code: ", response.code());
+					log.info("Cache:", response.cacheResponse().message());
+					log.info("Msg: ", response.message());
+					response.body().string();
 				}
-				String result = sb.toString();
-				log.info("Result Package：{}", result);
-				String nlu = nluService.dialog("device123", "uid123", result);
-				if (null != nlu) {
-					response.result.word = new String[]{nlu};
-				}
-				return response;
+				log.info(url + ", resp_code:" + response.code());
+				log.info(url + ", resp_message:" + response.message());
+				log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+				log.info(url + ", resp_protocol:" + response.protocol());
+				String body_string = response.body().string();
+				log.info(url + ", resp_body:" + body_string);
 			}
-		}
-		return null;
+		});*/
 	}
 
 	/**
@@ -304,24 +194,5 @@ public class HttpService {
 			headerBiulder.add(entry.getKey(), entry.getValue());
 		}
 		return headerBiulder.build();
-	}
-
-	/**
-	 * @author ITACHY
-	 * @date 2018/11/7
-	 * @desc build error response for occuring exception
-	 */
-	private List<ASR.APIResponse> buildFailResponse(String msg) {
-		List<ASR.APIResponse> responses = new ArrayList<>();
-		//build result response
-		ASR.APIResponse response = new ASR.APIResponse();
-		response.type = ASR.API_RESP_TYPE_RES;
-		response.errNo = -3003;
-		response.errMsg = msg;
-		responses.add(response);
-		//build last response
-		response = new ASR.APIResponse();
-		response.type = ASR.API_RESP_TYPE_LAST;
-		return responses;
 	}
 }

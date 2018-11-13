@@ -15,16 +15,14 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "asr")
 public class ASRConfig {
 
-	//@Value("${threads}")
 	private Integer threads;
 
-	//@Value("${blockSize}")
 	private Integer blockSize;
 
-	//@Value("${upUrl}")
-	private String upUrl;
+	private String baidu;
 
-	//@Value("${downUrl}")
-	private String downUrl;
+	private String local;
+
+	private String json;
 
 }

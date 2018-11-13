@@ -3,14 +3,14 @@ server:
 asr:
     threads: 500
     blockSize: 5120
-
-    upUrl: http://audiotest.baidu.com/open_asr_test/up
-    downUrl: http://audiotest.baidu.com/open_asr_test/down
+    baidu: http://audiotest.baidu.com/open_asr_test
+    local: http://localhost:8000/asr
+    json: http://localhost:8000/json
 
 nlu:
     version: 1.0
     protocol: cellphone
-    url: "http://ai.ecarx.com.cn/test/ai/"
+    url: http://ai.ecarx.com.cn/test/ai/
 
 
 
