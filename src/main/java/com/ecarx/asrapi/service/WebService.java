@@ -22,6 +22,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Nullable;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,15 +58,47 @@ public class WebService {
 
 	private OkHttpClient httpClient;
 
+	private final TrustManager[] trustAllCerts = new TrustManager[]{
+			new X509TrustManager() {
+				@Override
+				public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+				}
+
+				@Override
+				public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+				}
+
+				@Override
+				public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+					return new java.security.cert.X509Certificate[]{};
+				}
+			}
+	};
+
+	private final HostnameVerifier verifiedAllHostname = (hostname, session) -> true;
+
+	private SSLContext       sslContext;
+	private SSLSocketFactory sslSocketFactory;
+
 	@Autowired
-	public WebService(final ASRConfig config, final ParamService paramService) {
+	public WebService(final ASRConfig config, final ParamService paramService) throws Exception {
 
 		this.config = config;
 		this.paramService = paramService;
 		this.executor = new ScheduledThreadPoolExecutor(config.getThreads());
 
+		sslContext = SSLContext.getInstance("TLS");
+		sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+		sslSocketFactory = sslContext.getSocketFactory();
+
 		OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
-		clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
+		clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
+				.sslSocketFactory(sslSocketFactory, (X509TrustManager) trustAllCerts[0])
+				.hostnameVerifier(verifiedAllHostname)
+				.connectTimeout(60, TimeUnit.SECONDS)
+				.readTimeout(60, TimeUnit.SECONDS)
+				.writeTimeout(60, TimeUnit.SECONDS)
+				.retryOnConnectionFailure(true);
 		httpClient = clientBuilder.build();
 	}
 
@@ -188,7 +225,13 @@ public class WebService {
 		OkHttpClient httpClient = this.httpClient;
 		if (null != callBack) {
 			OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
-			clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
+			clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
+					.sslSocketFactory(this.sslSocketFactory, (X509TrustManager) trustAllCerts[0])
+					.hostnameVerifier(verifiedAllHostname)
+					.connectTimeout(60, TimeUnit.SECONDS)
+					.readTimeout(60, TimeUnit.SECONDS)
+					.writeTimeout(60, TimeUnit.SECONDS)
+					.retryOnConnectionFailure(true);
 			clientBuilder.addNetworkInterceptor(chain -> {
 				Response response = chain.proceed(chain.request());
 				return response.newBuilder().body(new ASRResponse(response.body(), callBack)).build();

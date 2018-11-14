@@ -1,13 +1,13 @@
 server:
     port: 8000
-#    http2:
-#        enabled: true
-#    compression:
-#        enabled: true
-#    ssl:
-#        key-store: classpath:asr.jks
-#        key-password: EcarxAsr
-#        key-store-password: EcarxAsr
+    http2:
+        enabled: true
+    compression:
+        enabled: true
+    ssl:
+        key-store: classpath:asr.jks
+        key-password: EcarxAsr
+        key-store-password: EcarxAsr
 asr:
     encrypt:
         keypair: RSA

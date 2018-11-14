@@ -72,7 +72,7 @@ public class HttpService {
 	 * @date 2018/11/3
 	 * @desc handle asr up request
 	 */
-	public Boolean handleASRUp(String id, LinkedBlockingQueue<ASR.APIRequest> requests) {
+	public void handleASRUp(String id, LinkedBlockingQueue<ASR.APIRequest> requests) {
 
 		//handle up steam
 		RequestBody body = new RequestBody() {
@@ -87,7 +87,8 @@ public class HttpService {
 				try {
 					ASR.APIRequest request = requests.poll(30000, TimeUnit.MILLISECONDS);
 					while (null != request) {
-						log.info("Sending Msg, type: {}", request.apiReqType);
+						int type = request.apiReqType;
+						log.info("Sending Msg, type: {}", type);
 						byte[] bytes = MessageNano.toByteArray(request);
 						try {
 							sink.writeIntLe(bytes.length);
@@ -96,7 +97,7 @@ public class HttpService {
 						} catch (Exception e) {
 							log.error("Param write error: ", e);
 						}
-						if (ASR.API_REQ_TYPE_LAST == request.apiReqType || ASR.API_REQ_TYPE_CANCEL == request.apiReqType) {
+						if (ASR.API_REQ_TYPE_LAST == type || ASR.API_REQ_TYPE_CANCEL == type) {
 							break;
 						}
 						request = requests.poll(30000, TimeUnit.MILLISECONDS);
@@ -108,8 +109,8 @@ public class HttpService {
 		};
 		Headers headers = buildUpHeader();
 		String  url     = config.getBaidu() + "/up?id=" + id;
+		//handlePostASR(url, body, headers, null);
 		executor.execute(() -> handlePostASR(url, body, headers, null));
-		return true;
 	}
 
 	/**
@@ -121,6 +122,7 @@ public class HttpService {
 		//handle up steam
 		Headers headers = buildUpHeader();
 		String  url     = config.getBaidu() + "/up?id=" + id;
+		//handlePostASR(url, body, headers, null);
 		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
 
@@ -139,9 +141,11 @@ public class HttpService {
 		BiConsumer<Buffer, Long> callBack = (sink, byteCount) -> {
 			try {
 				while (sink.size() > 4) {
-					long   len  = sink.readIntLe();
-					byte[] data = sink.readByteArray(len);
-					responses.add(ASR.APIResponse.parseFrom(data));
+					long            len      = sink.readIntLe();
+					byte[]          data     = sink.readByteArray(len);
+					ASR.APIResponse response = ASR.APIResponse.parseFrom(data);
+					log.info("收到数据：{}", response);
+					responses.add(response);
 				}
 			} catch (Exception e) {
 				log.error("Read response failed. error msg: ", e);
@@ -168,7 +172,19 @@ public class HttpService {
 			httpClient = clientBuilder.build();
 		}
 		Request request = new Request.Builder().url(url).post(body).headers(headers).build();
-		Call    call    = httpClient.newCall(request);
+		/*
+		try {
+			Response response = httpClient.newCall(request).execute();
+			//trigger read response
+			log.info(url + ", resp_code:" + response.code());
+			log.info(url + ", resp_message:" + response.message());
+			log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+			log.info(url + ", resp_protocol:" + response.protocol());
+			log.info("response text: ", response.body().string());
+		} catch (Exception e) {
+		}*/
+
+		Call call = httpClient.newCall(request);
 
 		call.enqueue(new Callback() {
 			@Override
@@ -183,9 +199,7 @@ public class HttpService {
 				log.info(url + ", resp_message:" + response.message());
 				log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
 				log.info(url + ", resp_protocol:" + response.protocol());
-				String body_string = response.body().string();
-				log.info(url + ", resp_body:" + body_string);
-				//log.info("response text: ", response.body().string());
+				log.info("response text: ", response.body().string());
 			}
 		});
 	}

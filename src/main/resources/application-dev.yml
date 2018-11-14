@@ -2,8 +2,8 @@ asr:
     threads: 500
     blockSize: 5120
     baidu: http://audiotest.baidu.com/open_asr_test
-    local: http://localhost:8000/asr
-    json: http://localhost:8000/json
+    local: https://localhost:8000/asr
+    json: https://localhost:8000/json
 
 nlu:
     version: 1.0
