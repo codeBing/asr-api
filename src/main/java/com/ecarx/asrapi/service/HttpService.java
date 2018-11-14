@@ -72,7 +72,8 @@ public class HttpService {
 	 * @date 2018/11/3
 	 * @desc handle asr up request
 	 */
-	public void handleASRUp(String id, LinkedBlockingQueue<ASR.APIRequest> requests) {
+	public Boolean handleASRUp(String id, LinkedBlockingQueue<ASR.APIRequest> requests) {
+
 		//handle up steam
 		RequestBody body = new RequestBody() {
 			@Nullable
@@ -86,22 +87,21 @@ public class HttpService {
 				try {
 					ASR.APIRequest request = requests.poll(30000, TimeUnit.MILLISECONDS);
 					while (null != request) {
-						if (null != request) {
-							byte[] bytes = MessageNano.toByteArray(request);
-							try {
-								sink.writeIntLe(bytes.length);
-								sink.write(bytes);
-								sink.flush();
-							} catch (Exception e) {
-								log.error("Param write error: ", e);
-							}
+						log.info("Sending Msg, type: {}", request.apiReqType);
+						byte[] bytes = MessageNano.toByteArray(request);
+						try {
+							sink.writeIntLe(bytes.length);
+							sink.write(bytes);
+							sink.flush();
+						} catch (Exception e) {
+							log.error("Param write error: ", e);
 						}
 						if (ASR.API_REQ_TYPE_LAST == request.apiReqType || ASR.API_REQ_TYPE_CANCEL == request.apiReqType) {
 							break;
 						}
 						request = requests.poll(30000, TimeUnit.MILLISECONDS);
 					}
-				} catch (Exception e) {
+				} catch (InterruptedException e) {
 					log.error("Build ASR-Request body failed, error msg: ", e);
 				}
 			}
@@ -109,6 +109,7 @@ public class HttpService {
 		Headers headers = buildUpHeader();
 		String  url     = config.getBaidu() + "/up?id=" + id;
 		executor.execute(() -> handlePostASR(url, body, headers, null));
+		return true;
 	}
 
 	/**

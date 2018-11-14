@@ -11,7 +11,7 @@ import okhttp3.FormBody;
 import okio.Buffer;
 import okio.BufferedSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Controller;
@@ -27,6 +27,7 @@ import reactor.core.publisher.Mono;
 import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
@@ -100,18 +101,12 @@ public class ASRHandler {
 	@ResponseBody
 	public Mono<String> handleASRUp(@RequestParam String id, ServerHttpRequest request) {
 
-		/*okhttp3.RequestBody body = new okhttp3.RequestBody() {
-			@Nullable
-			@Override
-			public okhttp3.MediaType contentType() {
-				return null;
-			}
+		log.info("收到请求，id={}", id);
+		long                                startTime = System.currentTimeMillis();
+		LinkedBlockingQueue<ASR.APIRequest> requests  = new LinkedBlockingQueue<>();
 
-			@Override
-			public void writeTo(BufferedSink sink) throws IOException {
-
-				Flux<DataBuffer> fluxBody = request.getBody();
-				fluxBody.subscribe(buffer -> {
+		request.getBody().doOnNext(buffer -> log.info("收到数据"))
+				.subscribe(buffer -> {
 					int length = buffer.readableByteCount();
 					if (length > 4) {
 						byte[] bytes = new byte[length];
@@ -119,45 +114,53 @@ public class ASRHandler {
 						buffer.read(bytes);
 						System.arraycopy(bytes, 4, data, 0, data.length);
 						try {
-							sink.writeIntLe(data.length);
-							sink.write(data);
-							sink.flush();
-
-							//----------------
 							ASR.APIRequest apiRequest = ASR.APIRequest.parseFrom(data);
-							log.info("Request Msg: {}", apiRequest.toString());
+							log.info("receive msg type: {}", apiRequest.apiReqType);
+							log.info("耗时: {}", System.currentTimeMillis() - startTime);
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
 
 					}
 				});
-			}
-		};
-		httpService.handleASRUp(id, body);*/
-
-		LinkedBlockingQueue<ASR.APIRequest> requests = new LinkedBlockingQueue<>();
-		Flux<DataBuffer>                    fluxBody = request.getBody();
-		fluxBody.subscribe(buffer -> {
-			int length = buffer.readableByteCount();
-			log.info("Msg length: {}", length);
+		/*List<ASR.APIRequest> requestList = request.getBody().toStream().parallel().map(buffer -> {
+			ASR.APIRequest apirequest = null;
+			int            length     = buffer.readableByteCount();
 			if (length > 4) {
 				byte[] bytes = new byte[length];
 				byte[] data  = new byte[length - 4];
 				buffer.read(bytes);
 				System.arraycopy(bytes, 4, data, 0, data.length);
 				try {
-					ASR.APIRequest apiRequest = ASR.APIRequest.parseFrom(data);
-					requests.add(apiRequest);
-					log.info("Request Msg: {}", apiRequest.toString());
+					apirequest = ASR.APIRequest.parseFrom(data);
+					log.info("消耗时间：{}", System.currentTimeMillis() - startTime);
+					log.info("Request Msg: {}", apirequest.apiReqType);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-
 			}
-		});
-		httpService.handleASRUp(id, requests);
-		return Mono.just("OK");
+			return apirequest;
+		}).collect(Collectors.toList());*/
+		//httpService.handleASRUp(id, requests);
+		try {
+			TimeUnit.SECONDS.sleep(5);
+		} catch (Exception e) {
+
+		}
+
+		try {
+			TimeUnit.SECONDS.sleep(5);
+		} catch (Exception e) {
+
+		}
+
+		try {
+			TimeUnit.SECONDS.sleep(5);
+		} catch (Exception e) {
+
+		}
+		return Mono.just("OK!");
+
 	}
 
 	/**
