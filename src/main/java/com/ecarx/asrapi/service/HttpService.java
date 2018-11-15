@@ -98,6 +98,7 @@ public class HttpService {
 		};
 		Headers headers = buildUpHeader();
 		String  url     = config.getUrl() + "/up?id=" + id;
+		log.info("发起ASR Up请求");
 		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
 
@@ -138,6 +139,7 @@ public class HttpService {
 				log.error("Read response failed. error msg: ", e);
 			}
 		};
+		log.info("发起ASR Down请求");
 		executor.execute(() -> handlePostASR(url, body, headers, callBack));
 		return responses;
 	}
@@ -150,12 +152,16 @@ public class HttpService {
 	private void handlePostASR(String url, RequestBody body, Headers headers, BiConsumer<Buffer, Long> callBack) {
 		OkHttpClient httpClient = httpUpClient;
 		if (null != callBack) {
+
 			OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
-			clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
-			clientBuilder.addNetworkInterceptor(chain -> {
-				Response response = chain.proceed(chain.request());
-				return response.newBuilder().body(new ASRResponse(response.body(), callBack)).build();
-			});
+			clientBuilder.readTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+					.writeTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+					.connectTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+					.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
+					.addNetworkInterceptor(chain -> {
+						Response response = chain.proceed(chain.request());
+						return response.newBuilder().body(new ASRResponse(response.body(), callBack)).build();
+					});
 			httpClient = clientBuilder.build();
 		}
 		Request request = new Request.Builder().url(url).post(body).headers(headers).build();
@@ -172,7 +178,7 @@ public class HttpService {
 				if (null != callBack) {
 					log.info(url + ", resp_code:" + response.code());
 					log.info(url + ", resp_message:" + response.message());
-					log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+					log.info(url + ", resp_encoding:" + response.header("Transfer-Encoding"));
 					log.info(url + ", resp_protocol:" + response.protocol());
 					log.info(url + ", response text: ", response.body().string());
 				}
@@ -210,10 +216,10 @@ public class HttpService {
 	 */
 	private Headers buildHeader(Map<String, String> headers) {
 
-		Headers.Builder headerBiulder = new Headers.Builder();
+		Headers.Builder headerBuilder = new Headers.Builder();
 		for (Map.Entry<String, String> entry : headers.entrySet()) {
-			headerBiulder.add(entry.getKey(), entry.getValue());
+			headerBuilder.add(entry.getKey(), entry.getValue());
 		}
-		return headerBiulder.build();
+		return headerBuilder.build();
 	}
 }

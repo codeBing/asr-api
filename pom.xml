@@ -102,23 +102,11 @@
             <scope>provided</scope>
         </dependency>
         
-        <!--<dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>${proto.version}</version>
-        </dependency>-->
-        
         <dependency>
             <groupId>com.google.protobuf.nano</groupId>
             <artifactId>protobuf-javanano</artifactId>
             <version>${protoNano.version}</version>
         </dependency>
-        
-        <!--<dependency>
-            <groupId>com.googlecode.protobuf-java-format</groupId>
-            <artifactId>protobuf-java-format</artifactId>
-            <version>1.4</version>
-        </dependency>-->
         
         <dependency>
             <groupId>com.google.protobuf</groupId>
@@ -130,15 +118,15 @@
     
     
     <build>
-        <extensions>
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>1.5.0.Final</version>
-            </extension>
-        </extensions>
+        <!-- <extensions>
+             <extension>
+                 <groupId>kr.motd.maven</groupId>
+                 <artifactId>os-maven-plugin</artifactId>
+                 <version>1.5.0.Final</version>
+             </extension>
+         </extensions>-->
         <plugins>
-            <plugin>
+            <!--<plugin>
                 <groupId>org.xolstice.maven.plugins</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
                 <version>0.5.1</version>
@@ -155,7 +143,7 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
+            </plugin>-->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -163,11 +151,11 @@
         </plugins>
     </build>
     
-    <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-    </repositories>
+    <!--    <repositories>
+            <repository>
+                <id>jitpack.io</id>
+                <url>https://jitpack.io</url>
+            </repository>
+        </repositories>-->
 
 </project>

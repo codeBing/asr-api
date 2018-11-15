@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,11 +35,13 @@ public class NLUService {
 
 	private static OkHttpClient httpClient;
 
+	private static final int TIME_OUT = 30000;
+
 	static {
 		OkHttpClient.Builder builder = new OkHttpClient.Builder();
-		builder.connectTimeout(30000, TimeUnit.MILLISECONDS)
-				.readTimeout(30000, TimeUnit.MILLISECONDS)
-				.writeTimeout(30000, TimeUnit.MILLISECONDS);
+		builder.connectTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+				.readTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+				.writeTimeout(TIME_OUT, TimeUnit.MILLISECONDS);
 		httpClient = builder.build();
 	}
 
@@ -58,9 +61,9 @@ public class NLUService {
 				talk(text, accessToken);
 				// 这里获取服务器的数据
 				nlu = fetch(accessToken);
-				logout(accessToken, device);
 				jsonObject = JSONObject.parseObject(nlu);
 				domain = jsonObject.getString("domain");
+				logout(accessToken, device);
 				if (StringUtils.isEmpty(domain)) {
 					return dialog(device, uid, text);
 				}
@@ -161,7 +164,7 @@ public class NLUService {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				log.info("Logout Success!, msg: {}", response.body().string());
+				log.info("Talk Success!, msg: {}", response.body().string());
 			}
 		});
 	}
