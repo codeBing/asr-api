@@ -79,35 +79,35 @@ public class ASRHandler {
 		long                                startTime = System.currentTimeMillis();
 		LinkedBlockingQueue<ASR.APIRequest> requests  = new LinkedBlockingQueue<>();
 
-		return Mono.create(call -> {
+		return Mono.create(call ->
 
-			request.getBody().subscribe(buffer -> {
-				boolean        flag       = false;
-				ASR.APIRequest apiRequest = null;
-				int            length     = buffer.readableByteCount();
-				if (length > 4) {
-					byte[] bytes = new byte[length];
-					byte[] data  = new byte[length - 4];
-					buffer.read(bytes);
-					System.arraycopy(bytes, 4, data, 0, data.length);
-					try {
-						apiRequest = ASR.APIRequest.parseFrom(data);
-						if (ASR.API_REQ_TYPE_LAST == apiRequest.apiReqType) {
-							flag = true;
+				request.getBody().subscribe(buffer -> {
+					boolean        flag       = false;
+					ASR.APIRequest apiRequest = null;
+					int            length     = buffer.readableByteCount();
+					if (length > 4) {
+						byte[] bytes = new byte[length];
+						byte[] data  = new byte[length - 4];
+						buffer.read(bytes);
+						System.arraycopy(bytes, 4, data, 0, data.length);
+						try {
+							apiRequest = ASR.APIRequest.parseFrom(data);
+							if (ASR.API_REQ_TYPE_LAST == apiRequest.apiReqType) {
+								flag = true;
+							}
+							requests.add(apiRequest);
+							log.info("receive msg type: {}", apiRequest.apiReqType);
+							log.info("耗时: {}", System.currentTimeMillis() - startTime);
+						} catch (Exception e) {
+							e.printStackTrace();
 						}
-						requests.add(apiRequest);
-						log.info("receive msg type: {}", apiRequest.apiReqType);
-						log.info("耗时: {}", System.currentTimeMillis() - startTime);
-					} catch (Exception e) {
-						e.printStackTrace();
 					}
-				}
-				if (flag) {
-					httpService.handleASRUp(id, requests);
-					call.success("ok");
-				}
-			});
-		});
+					if (flag) {
+						httpService.handleASRUp(id, requests);
+						call.success("ok");
+					}
+				})
+		);
 	}
 
 	/**
