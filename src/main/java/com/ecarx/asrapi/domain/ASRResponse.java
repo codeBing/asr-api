@@ -18,8 +18,6 @@ import java.util.function.BiConsumer;
  */
 public class ASRResponse extends ResponseBody {
 
-	//private final static Logger log = LoggerFactory.getLogger(ASRResponse.class);
-
 	private ResponseBody             respBody;
 	private BiConsumer<Buffer, Long> callBack;
 

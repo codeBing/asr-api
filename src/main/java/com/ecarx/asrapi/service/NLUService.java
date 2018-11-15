@@ -1,6 +1,9 @@
 package com.ecarx.asrapi.service;
 
 import com.alibaba.fastjson.JSONObject;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -13,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -21,10 +25,9 @@ import java.util.concurrent.TimeUnit;
  * @desc TO-DO
  */
 
+@Slf4j
 @Service
 public class NLUService {
-
-	private static Logger log = LoggerFactory.getLogger(NLUService.class);
 
 	@Value("${nlu.version}")
 	private double version;
@@ -96,7 +99,11 @@ public class NLUService {
 		json.put("clientinfo", client);
 		json.put("type", "login");
 
-		String      uri     = new StringBuilder(url).append("login?protocol=").append(protocol).append("&version=").append(version).toString();
+		String uri = new StringBuilder(url)
+				.append("login?protocol=").append(protocol)
+				.append("&version=").append(version)
+				.toString();
+
 		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
 		Request     request = new Request.Builder().url(uri).post(body).build();
 		try {
@@ -119,13 +126,18 @@ public class NLUService {
 
 		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
 		Request     request = new Request.Builder().url(url + "logout?ak=" + accessToken).post(body).build();
-		try {
-			Response response = httpClient.newCall(request).execute();
-			log.info("NLU logout msg: {}", response.body().string());
-		} catch (Exception e) {
-			log.error("NLU Logout request falied, error msg: ", e);
-		}
 
+		httpClient.newCall(request).enqueue(new Callback() {
+			@Override
+			public void onFailure(Call call, IOException e) {
+				log.error("Logout Failed, error msg: ", e);
+			}
+
+			@Override
+			public void onResponse(Call call, Response response) throws IOException {
+				log.info("Logout Success!, msg: {}", response.body().string());
+			}
+		});
 	}
 
 	public void talk(String text, String accessToken) {
@@ -142,24 +154,26 @@ public class NLUService {
 
 		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
 		Request     request = new Request.Builder().url(uri).post(body).build();
-		try {
-			Response response = httpClient.newCall(request).execute();
-			log.info("NLU talk msg: {}", response.body().string());
-		} catch (Exception e) {
-			log.error("NLU Talk request falied, error msg: ", e);
-		}
 
+		httpClient.newCall(request).enqueue(new Callback() {
+			@Override
+			public void onFailure(Call call, IOException e) {
+				log.error("Logout Failed, error msg: ", e);
+			}
+
+			@Override
+			public void onResponse(Call call, Response response) throws IOException {
+				log.info("Logout Success!, msg: {}", response.body().string());
+			}
+		});
 	}
 
 	public String fetch(String accessToken) {
 
 		String uri = new StringBuilder(url)
-				.append("fetch?protocol=")
-				.append(protocol)
-				.append("&version=")
-				.append(version)
-				.append("&ak=")
-				.append(accessToken)
+				.append("fetch?protocol=").append(protocol)
+				.append("&version=").append(version)
+				.append("&ak=").append(accessToken)
 				.toString();
 		Request request = new Request.Builder().url(uri).get().build();
 		try {

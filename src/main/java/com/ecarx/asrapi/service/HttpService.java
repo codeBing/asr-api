@@ -16,7 +16,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okio.Buffer;
 import okio.BufferedSink;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Nullable;
@@ -41,22 +40,15 @@ public class HttpService {
 
 	private final ASRConfig config;
 
-	private final NLUService nluService;
-
-	private final ParamService paramService;
-
 	private final ThreadPoolExecutor executor;
 
 	private OkHttpClient httpClient;
 
 	private final OkHttpClient.Builder clientBuilder;
 
-	@Autowired
-	public HttpService(final ASRConfig config, final NLUService nluService, final ParamService paramService) {
+	public HttpService(final ASRConfig config) {
 
 		this.config = config;
-		this.nluService = nluService;
-		this.paramService = paramService;
 		this.executor = new ScheduledThreadPoolExecutor(config.getThreads());
 
 		this.clientBuilder = new OkHttpClient.Builder()
@@ -90,26 +82,21 @@ public class HttpService {
 						int type = request.apiReqType;
 						log.info("Sending Msg, type: {}", type);
 						byte[] bytes = MessageNano.toByteArray(request);
-						try {
-							sink.writeIntLe(bytes.length);
-							sink.write(bytes);
-							sink.flush();
-						} catch (Exception e) {
-							log.error("Param write error: ", e);
-						}
+						sink.writeIntLe(bytes.length);
+						sink.write(bytes);
+						sink.flush();
 						if (ASR.API_REQ_TYPE_LAST == type || ASR.API_REQ_TYPE_CANCEL == type) {
 							break;
 						}
 						request = requests.poll(30000, TimeUnit.MILLISECONDS);
 					}
-				} catch (InterruptedException e) {
+				} catch (Exception e) {
 					log.error("Build ASR-Request body failed, error msg: ", e);
 				}
 			}
 		};
 		Headers headers = buildUpHeader();
 		String  url     = config.getBaidu() + "/up?id=" + id;
-		//handlePostASR(url, body, headers, null);
 		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
 
@@ -172,20 +159,8 @@ public class HttpService {
 			httpClient = clientBuilder.build();
 		}
 		Request request = new Request.Builder().url(url).post(body).headers(headers).build();
-		/*
-		try {
-			Response response = httpClient.newCall(request).execute();
-			//trigger read response
-			log.info(url + ", resp_code:" + response.code());
-			log.info(url + ", resp_message:" + response.message());
-			log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
-			log.info(url + ", resp_protocol:" + response.protocol());
-			log.info("response text: ", response.body().string());
-		} catch (Exception e) {
-		}*/
 
 		Call call = httpClient.newCall(request);
-
 		call.enqueue(new Callback() {
 			@Override
 			public void onFailure(Call call, IOException e) {
@@ -199,7 +174,7 @@ public class HttpService {
 				log.info(url + ", resp_message:" + response.message());
 				log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
 				log.info(url + ", resp_protocol:" + response.protocol());
-				log.info("response text: ", response.body().string());
+				log.info(url + ", response text: ", response.body().string());
 			}
 		});
 	}
