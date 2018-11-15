@@ -79,8 +79,8 @@ public class JSONHandler {
 								flag = true;
 							}
 							requests.add(apiRequest);
-							log.info("receive msg type: {}", apiRequest.apiReqType);
-							log.info("耗时: {}", System.currentTimeMillis() - startTime);
+							log.info("receive msg type: {}, 耗时: {}", apiRequest.apiReqType,
+									System.currentTimeMillis() - startTime);
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
@@ -116,8 +116,7 @@ public class JSONHandler {
 					response = responses.take();
 					continue;
 				} else if (ASR.API_RESP_TYPE_RES == type) {
-
-					if (null != response && 0 == response.errNo) {
+					if (0 == response.errNo) {
 						StringBuilder sb      = new StringBuilder();
 						String[]      words   = response.result.word;
 						String[]      unknown = response.result.uncertainWord;

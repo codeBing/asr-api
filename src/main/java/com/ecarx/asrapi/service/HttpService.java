@@ -42,21 +42,23 @@ public class HttpService {
 
 	private final ThreadPoolExecutor executor;
 
-	private OkHttpClient httpClient;
+	private static final int TIME_OUT = 30000;
 
-	private final OkHttpClient.Builder clientBuilder;
+	private static final OkHttpClient httpUpClient;
+
+	static {
+		OkHttpClient.Builder upClientBuilder = new OkHttpClient.Builder()
+				.readTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+				.writeTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+				.connectTimeout(TIME_OUT, TimeUnit.MILLISECONDS)
+				.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
+		httpUpClient = upClientBuilder.build();
+	}
 
 	public HttpService(final ASRConfig config) {
 
 		this.config = config;
 		this.executor = new ScheduledThreadPoolExecutor(config.getThreads());
-
-		this.clientBuilder = new OkHttpClient.Builder()
-				.readTimeout(30, TimeUnit.SECONDS)
-				.writeTimeout(30, TimeUnit.SECONDS)
-				.connectTimeout(30, TimeUnit.SECONDS)
-				.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
-		this.httpClient = this.clientBuilder.build();
 	}
 
 	/**
@@ -77,10 +79,9 @@ public class HttpService {
 			@Override
 			public void writeTo(BufferedSink sink) {
 				try {
-					ASR.APIRequest request = requests.poll(30000, TimeUnit.MILLISECONDS);
+					ASR.APIRequest request = requests.poll(config.getTimeout(), TimeUnit.MILLISECONDS);
 					while (null != request) {
-						int type = request.apiReqType;
-						log.info("Sending Msg, type: {}", type);
+						int    type  = request.apiReqType;
 						byte[] bytes = MessageNano.toByteArray(request);
 						sink.writeIntLe(bytes.length);
 						sink.write(bytes);
@@ -96,7 +97,7 @@ public class HttpService {
 			}
 		};
 		Headers headers = buildUpHeader();
-		String  url     = config.getBaidu() + "/up?id=" + id;
+		String  url     = config.getUrl() + "/up?id=" + id;
 		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
 
@@ -108,7 +109,7 @@ public class HttpService {
 	public void handleASRUp(String id, final RequestBody body) {
 		//handle up steam
 		Headers headers = buildUpHeader();
-		String  url     = config.getBaidu() + "/up?id=" + id;
+		String  url     = config.getUrl() + "/up?id=" + id;
 		//handlePostASR(url, body, headers, null);
 		executor.execute(() -> handlePostASR(url, body, headers, null));
 	}
@@ -122,7 +123,7 @@ public class HttpService {
 
 		LinkedBlockingQueue<ASR.APIResponse> responses = new LinkedBlockingQueue<>();
 		//handle down stream
-		String  url     = config.getBaidu() + "/down?id=" + id;
+		String  url     = config.getUrl() + "/down?id=" + id;
 		Headers headers = buildDownHeader();
 
 		BiConsumer<Buffer, Long> callBack = (sink, byteCount) -> {
@@ -131,7 +132,6 @@ public class HttpService {
 					long            len      = sink.readIntLe();
 					byte[]          data     = sink.readByteArray(len);
 					ASR.APIResponse response = ASR.APIResponse.parseFrom(data);
-					log.info("收到数据：{}", response);
 					responses.add(response);
 				}
 			} catch (Exception e) {
@@ -148,7 +148,7 @@ public class HttpService {
 	 * @desc send all requests by POST method
 	 */
 	private void handlePostASR(String url, RequestBody body, Headers headers, BiConsumer<Buffer, Long> callBack) {
-		OkHttpClient httpClient = this.httpClient;
+		OkHttpClient httpClient = httpUpClient;
 		if (null != callBack) {
 			OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
 			clientBuilder.protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1));
@@ -160,8 +160,7 @@ public class HttpService {
 		}
 		Request request = new Request.Builder().url(url).post(body).headers(headers).build();
 
-		Call call = httpClient.newCall(request);
-		call.enqueue(new Callback() {
+		httpClient.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(Call call, IOException e) {
 				log.error("ASR request failed, fail msg: ", e);
@@ -170,11 +169,13 @@ public class HttpService {
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
 				//trigger read response
-				log.info(url + ", resp_code:" + response.code());
-				log.info(url + ", resp_message:" + response.message());
-				log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
-				log.info(url + ", resp_protocol:" + response.protocol());
-				log.info(url + ", response text: ", response.body().string());
+				if (null != callBack) {
+					log.info(url + ", resp_code:" + response.code());
+					log.info(url + ", resp_message:" + response.message());
+					log.info(url + ", resp_Transfer-Encoding:" + response.header("Transfer-Encoding"));
+					log.info(url + ", resp_protocol:" + response.protocol());
+					log.info(url + ", response text: ", response.body().string());
+				}
 			}
 		});
 	}

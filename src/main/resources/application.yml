@@ -8,16 +8,6 @@ server:
         key-store: classpath:asr.jks
         key-password: EcarxAsr
         key-store-password: EcarxAsr
-asr:
-    encrypt:
-        keypair: RSA
-        #        cipher: OPENSSL_PKCS1_PADDING
-        #        cipher: RSA/None/NoPadding
-        #        cipher: RSA/None/PKCS1Padding
-        cipher: RSA/ECB/PKCS1Padding
-        encBlock: 117
-        decBlock: 128
-        pubkey: MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDhSzPPnFn41iaz+t4tI4kbaXNuNFOsI8hFeCYtlwPFKRbETHbBS10bMvUbOWLFtRgZV3L924GQ9orbomEmJ1nWyaSO8iBbZAyiWUP5PJJh/b9kHj1MMwG712bGfYYPdjkRprNpzU9w4UBzUMKKUoHU4c/Gbb4XeBK9LNTPWQL4YwIDAQAB
 
 spring:
     profiles:

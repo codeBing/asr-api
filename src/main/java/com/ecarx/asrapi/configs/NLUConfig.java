@@ -12,12 +12,15 @@ import org.springframework.context.annotation.Configuration;
 
 @Data
 @Configuration
-@ConfigurationProperties(prefix = "asr")
-public class ASRConfig {
+@ConfigurationProperties(prefix = "nlu")
+public class NLUConfig {
 
 	private String url;
 
-	private Integer threads;
+	private Double version;
 
 	private Integer timeout;
+
+	private String protocol;
+
 }

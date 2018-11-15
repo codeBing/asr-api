@@ -1,6 +1,7 @@
 package com.ecarx.asrapi.service;
 
 import com.alibaba.fastjson.JSONObject;
+import com.ecarx.asrapi.configs.NLUConfig;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -29,14 +30,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class NLUService {
 
-	@Value("${nlu.version}")
-	private double version;
-
-	@Value("${nlu.protocol}")
-	private String protocol;
-
-	@Value("${nlu.url}")
-	private String url;
+	private final NLUConfig config;
 
 	private static OkHttpClient httpClient;
 
@@ -46,6 +40,10 @@ public class NLUService {
 				.readTimeout(30000, TimeUnit.MILLISECONDS)
 				.writeTimeout(30000, TimeUnit.MILLISECONDS);
 		httpClient = builder.build();
+	}
+
+	public NLUService(final NLUConfig config) {
+		this.config = config;
 	}
 
 	public String dialog(String device, String uid, String text) {
@@ -99,9 +97,9 @@ public class NLUService {
 		json.put("clientinfo", client);
 		json.put("type", "login");
 
-		String uri = new StringBuilder(url)
-				.append("login?protocol=").append(protocol)
-				.append("&version=").append(version)
+		String uri = new StringBuilder(config.getUrl())
+				.append("login?protocol=").append(config.getProtocol())
+				.append("&version=").append(config.getVersion())
 				.toString();
 
 		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
@@ -125,7 +123,7 @@ public class NLUService {
 		json.put("type", "logout");
 
 		RequestBody body    = FormBody.create(MediaType.parse("application/json"), json.toJSONString());
-		Request     request = new Request.Builder().url(url + "logout?ak=" + accessToken).post(body).build();
+		Request     request = new Request.Builder().url(config.getUrl() + "logout?ak=" + accessToken).post(body).build();
 
 		httpClient.newCall(request).enqueue(new Callback() {
 			@Override
@@ -148,7 +146,7 @@ public class NLUService {
 		json.put("q", text);
 		json.put("source", 1);
 
-		String uri = new StringBuilder(url)
+		String uri = new StringBuilder(config.getUrl())
 				.append("talk?&ak=")
 				.append(accessToken).toString();
 
@@ -170,9 +168,9 @@ public class NLUService {
 
 	public String fetch(String accessToken) {
 
-		String uri = new StringBuilder(url)
-				.append("fetch?protocol=").append(protocol)
-				.append("&version=").append(version)
+		String uri = new StringBuilder(config.getUrl())
+				.append("fetch?protocol=").append(config.getProtocol())
+				.append("&version=").append(config.getVersion())
 				.append("&ak=").append(accessToken)
 				.toString();
 		Request request = new Request.Builder().url(uri).get().build();

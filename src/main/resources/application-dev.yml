@@ -1,12 +1,11 @@
 asr:
     threads: 500
-    blockSize: 5120
-    baidu: http://audiotest.baidu.com/open_asr_test
-    local: https://localhost:8000/asr
-    json: https://localhost:8000/json
+    timeout: 30000
+    url: http://audiotest.baidu.com/open_asr_test
 
 nlu:
     version: 1.0
+    timeout: 30000
     protocol: cellphone
     url: http://ai.ecarx.com.cn/test/ai/
 

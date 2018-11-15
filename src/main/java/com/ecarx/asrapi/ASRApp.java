@@ -8,11 +8,6 @@ import org.springframework.http.converter.protobuf.ProtobufJsonFormatHttpMessage
 @SpringBootApplication
 public class ASRApp {
 
-	/*@Bean
-	ProtobufHttpMessageConverter protobufHttpMessageConverter() {
-		return new ProtobufHttpMessageConverter();
-	}*/
-
 	@Bean
 	ProtobufJsonFormatHttpMessageConverter protobufHttpMessageConverter() {
 		return new ProtobufJsonFormatHttpMessageConverter();
